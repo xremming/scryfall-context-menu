@@ -1,0 +1,6 @@
+{
+  "name": "scryfall-context-menu",
+  "devDependencies": {
+    "@types/chrome": "^0.0.270"
+  }
+}
