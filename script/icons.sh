@@ -15,14 +15,20 @@ echo "Generating icon-128.png..."
 convert icon-512.png -matte matte.png \
   -gravity center -background none \
   -resize 96x96 -extent 128x128 \
-  -compose DstIn -composite icon-128.png
+  -compose DstIn -composite \
+  -define png:exclude-chunks=date,time \
+  icon-128.png
 
 echo "Generating icon-48.png..."
 convert icon-512.png -matte matte.png \
   -background none -resize 48x48 \
-  -compose DstIn -composite icon-48.png
+  -compose DstIn -composite \
+  -define png:exclude-chunks=date,time \
+  icon-48.png
 
 echo "Generating icon-16.png..."
 convert icon-512.png -matte matte.png \
   -background none -resize 16x16 \
-  -compose DstIn -composite icon-16.png
+  -compose DstIn -composite \
+  -define png:exclude-chunks=date,time \
+  icon-16.png
