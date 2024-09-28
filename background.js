@@ -30,7 +30,7 @@ chrome.contextMenus.onClicked.addListener((info, tab) => {
   url.searchParams.set("q", info.selectionText);
   url.searchParams.set("utm_source", UTM_SOURCE);
 
-  chrome.tabs.create({ url: url, index: tab.index + 1 });
+  chrome.tabs.create({ url: url.toString(), index: tab.index + 1 });
 });
 
 async function getResults(text) {
