@@ -1,5 +1,11 @@
+// @ts-check
+
 const UTM_SOURCE = "Scryfall Context Menu";
 
+/**
+ * @param {string} unsafe
+ * @returns {string}
+ */
 function escapeXML(unsafe) {
   return unsafe.replace(/[<>&'"]/g, function (c) {
     switch (c) {
@@ -13,9 +19,13 @@ function escapeXML(unsafe) {
         return "&apos;";
       case '"':
         return "&quot;";
+      default:
+        return c;
     }
   });
 }
+
+// === CONTEXT MENU ===
 
 chrome.runtime.onInstalled.addListener(async () => {
   chrome.contextMenus.create({
@@ -26,34 +36,72 @@ chrome.runtime.onInstalled.addListener(async () => {
 });
 
 chrome.contextMenus.onClicked.addListener((info, tab) => {
-  const url = new URL("https://scryfall.com/search");
-  url.searchParams.set("q", info.selectionText);
-  url.searchParams.set("utm_source", UTM_SOURCE);
+  const urlObj = new URL("https://scryfall.com/search");
+  urlObj.searchParams.set("q", info.selectionText ?? "");
+  urlObj.searchParams.set("utm_source", UTM_SOURCE);
 
-  chrome.tabs.create({ url: url.toString(), index: tab.index + 1 });
+  const url = urlObj.toString();
+
+  let index = tab?.index;
+  if (index !== undefined) {
+    index += 1;
+  }
+
+  chrome.tabs.create({ url, index });
 });
 
-async function getResults(text) {
+// === OMNIBOX ===
+
+/**
+ * @param {string} text
+ * @returns {Promise<string[]>}
+ */
+function autocomplete(text) {
   const completeURL = new URL("https://api.scryfall.com/cards/autocomplete");
   completeURL.searchParams.set("q", text);
 
-  const autocompleteData = await fetch(completeURL)
+  return fetch(completeURL)
     .then((resp) => resp.json())
     .then((data) => data.data);
+}
 
+/**
+ * @param {string} name
+ * @returns {Promise<{ name?: string; mana_cost?: string; type_line?: string; scryfall_uri?: string; }>}
+ */
+function named(name) {
+  const namedURL = new URL("https://api.scryfall.com/cards/named");
+  namedURL.searchParams.set("exact", name);
+
+  return fetch(namedURL).then((resp) => resp.json());
+}
+
+/**
+ * @param {string} text
+ * @returns {Promise<{ name?: string; mana_cost?: string; type_line?: string; scryfall_uri?: string; }[]>}
+ */
+function search(text) {
   const searchURL = new URL("https://api.scryfall.com/cards/search");
   searchURL.searchParams.set("q", text);
 
-  const fetches = [
-    ...autocompleteData.map((name) => {
-      const namedURL = new URL("https://api.scryfall.com/cards/named");
-      namedURL.searchParams.set("exact", name);
+  return fetch(searchURL)
+    .then((resp) => resp.json())
+    .then((data) => data.data);
+}
 
-      return fetch(namedURL).then((resp) => resp.json());
-    }),
-    fetch(searchURL)
-      .then((resp) => resp.json())
-      .then((data) => data.data),
+/**
+ * @param {string} text
+ * @returns {Promise<{ name?: string; mana_cost?: string; type_line?: string; scryfall_uri?: string; }[]>}
+ */
+async function getResults(text) {
+  const searchURL = new URL("https://api.scryfall.com/cards/search");
+  searchURL.searchParams.set("q", text);
+
+  const autocompleteData = await autocomplete(text);
+
+  const fetches = [
+    ...autocompleteData.map(named),
+    search(text),
   ];
 
   return Promise.allSettled(fetches).then((results) =>
@@ -63,10 +111,10 @@ async function getResults(text) {
       .filter(Boolean)
       .flat(1)
       .map((card) => ({
-        name: card?.name ?? null,
-        mana_cost: card?.mana_cost ?? null,
-        type_line: card?.type_line ?? null,
-        scryfall_uri: card?.scryfall_uri ?? null,
+        name: card?.name,
+        mana_cost: card?.mana_cost,
+        type_line: card?.type_line,
+        scryfall_uri: card?.scryfall_uri,
       }))
   );
 }
