@@ -3,6 +3,22 @@
 const UTM_SOURCE = "Scryfall Context Menu";
 
 /**
+ * @param {string} url
+ * @param {Record<string, string> | null} query
+ * @returns {URL}
+ */
+function makeURL(url, query = null) {
+  const out = new URL(url);
+  if (query) {
+    for (const [key, value] of Object.entries(query)) {
+      out.searchParams.set(key, value);
+    }
+  }
+  out.searchParams.set("utm_source", UTM_SOURCE);
+  return out;
+}
+
+/**
  * @param {string} unsafe
  * @returns {string}
  */
@@ -36,9 +52,9 @@ chrome.runtime.onInstalled.addListener(async () => {
 });
 
 chrome.contextMenus.onClicked.addListener((info, tab) => {
-  const urlObj = new URL("https://scryfall.com/search");
-  urlObj.searchParams.set("q", info.selectionText ?? "");
-  urlObj.searchParams.set("utm_source", UTM_SOURCE);
+  const urlObj = makeURL("https://scryfall.com/search", {
+    q: info.selectionText ?? "",
+  });
 
   const url = urlObj.toString();
 
@@ -57,8 +73,9 @@ chrome.contextMenus.onClicked.addListener((info, tab) => {
  * @returns {Promise<string[]>}
  */
 function autocomplete(text) {
-  const completeURL = new URL("https://api.scryfall.com/cards/autocomplete");
-  completeURL.searchParams.set("q", text);
+  const completeURL = makeURL("https://api.scryfall.com/cards/autocomplete", {
+    q: text,
+  });
 
   return fetch(completeURL)
     .then((resp) => resp.json())
@@ -70,8 +87,9 @@ function autocomplete(text) {
  * @returns {Promise<{ name?: string; mana_cost?: string; type_line?: string; scryfall_uri?: string; }>}
  */
 function named(name) {
-  const namedURL = new URL("https://api.scryfall.com/cards/named");
-  namedURL.searchParams.set("exact", name);
+  const namedURL = makeURL("https://api.scryfall.com/cards/named", {
+    exact: name,
+  });
 
   return fetch(namedURL).then((resp) => resp.json());
 }
@@ -81,8 +99,9 @@ function named(name) {
  * @returns {Promise<{ name?: string; mana_cost?: string; type_line?: string; scryfall_uri?: string; }[]>}
  */
 function search(text) {
-  const searchURL = new URL("https://api.scryfall.com/cards/search");
-  searchURL.searchParams.set("q", text);
+  const searchURL = makeURL("https://api.scryfall.com/cards/search", {
+    q: text,
+  });
 
   return fetch(searchURL)
     .then((resp) => resp.json())
@@ -94,15 +113,9 @@ function search(text) {
  * @returns {Promise<{ name?: string; mana_cost?: string; type_line?: string; scryfall_uri?: string; }[]>}
  */
 async function getResults(text) {
-  const searchURL = new URL("https://api.scryfall.com/cards/search");
-  searchURL.searchParams.set("q", text);
-
   const autocompleteData = await autocomplete(text);
 
-  const fetches = [
-    ...autocompleteData.map(named),
-    search(text),
-  ];
+  const fetches = [...autocompleteData.map(named), search(text)];
 
   return Promise.allSettled(fetches).then((results) =>
     results
@@ -131,9 +144,7 @@ chrome.omnibox.onInputChanged.addListener((text, suggest) => {
             return null;
           }
 
-          const scryfallURI = new URL(card.scryfall_uri);
-          scryfallURI.searchParams.set("utm_source", UTM_SOURCE);
-
+          const scryfallURI = makeURL(card.scryfall_uri);
           const content = scryfallURI.toString();
 
           let description = `<match>${escapeXML(card.name)}</match>`;
@@ -156,11 +167,11 @@ chrome.omnibox.onInputChanged.addListener((text, suggest) => {
 chrome.omnibox.onInputEntered.addListener((text, disposition) => {
   let rawURL;
   if (text.startsWith("https://")) {
-    rawURL = new URL(text);
+    rawURL = makeURL(text);
   } else {
-    rawURL = new URL("https://scryfall.com/search");
-    rawURL.searchParams.set("q", text);
-    rawURL.searchParams.set("utm_source", UTM_SOURCE);
+    rawURL = makeURL("https://scryfall.com/search", {
+      q: text,
+    });
   }
 
   const url = rawURL.toString();
